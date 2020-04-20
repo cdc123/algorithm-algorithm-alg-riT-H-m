@@ -1,0 +1,116 @@
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>HelloWorld</title>
+    <script src="../static/js/d3.min.js" charset="utf-8"></script>
+</head>
+<body>
+<p>Hello World</p>
+<script>
+    //画布大小
+    var width = 2000;
+    var height = 1000;//
+    //在 body 里添加一个 SVG 画布
+    var svg = d3.select("body")
+        .append("svg")
+        .attr("width", width)
+        .attr("height", height);
+
+    //节点
+    var nodes = [{name: "桂林",id:"001"}, {name: "广州",id:"002"},
+        {name: "厦门",id:"003"}, {name: "杭州",id:"004"},
+        {name: "上海",id:"005"}, {name: "青岛",id:"006"},
+        {name: "天津",id:"007"}];
+
+    //连线  source:父节点索引,target:目标节点索引
+    var edges = [{source: 0, target: 2},
+        {source: 0, target: 3}, {source: 1, target: 4},
+        {source: 1, target: 5}, {source: 1, target: 6}];
+
+    var force = d3.layout.force()
+        .nodes(nodes) //指定节点数组
+        .links(edges) //指定连线数组
+        .size([width, height]) //指定作用域范围
+        .linkDistance(150) //指定连线长度
+        .charge([-2000]); //相互之间的作用力
+
+
+    force.start();    //开始作用
+
+    var radius = 30;   //节点圆半径
+
+    //添加连线
+    var svg_edges = svg.selectAll("line")
+        .data(edges)
+        .enter()
+        .append("line")
+        .style("stroke", "#ccc")
+        .style("stroke-width", 1);
+
+    var color = d3.scale.category20();
+
+    //添加节点
+    var svg_nodes = svg.selectAll("circle")
+        .data(nodes)
+        .enter()
+        .append("circle")
+        .attr("r", radius)
+        .text(function (d) {
+            return d.name;
+        })
+        .style("fill", function (d, i) {
+            return color(i);
+        })
+        .call(force.drag);  //使得节点能够拖动
+
+    //添加描述节点的文字
+    var svg_texts = svg.selectAll("text")
+        .data(nodes)
+        .enter()
+        .append("text")
+        .attr("font-family", "微软雅黑")
+        .attr("text-anchor", "middle")
+        .attr("dy", 8)
+        .text(function (d) {
+            return d.name;
+        });
+
+    // 调用 call( force.drag ) 后节点可被拖动。force.drag() 是一个函数，将其作为 call() 的参数，相当于将当前选择的元素传到 force.drag() 函数中。
+    // 最后，还有一段最重要的代码。由于力导向图是不断运动的，每一时刻都在发生更新，因此，必须不断更新节点和连线的位置。力导向图布局 force 有一个事件 tick，每进行到一个时刻，都要调用它，更新的内容就写在它的监听器里就好。
+
+
+    force.on("tick", function () { //对于每一个时间间隔
+        //更新连线坐标
+        svg_edges.attr("x1", function (d) {
+            return d.source.x;
+        })
+            .attr("y1", function (d) {
+                return d.source.y;
+            })
+            .attr("x2", function (d) {
+                return d.target.x;
+            })
+            .attr("y2", function (d) {
+                return d.target.y;
+            });
+
+        //更新节点坐标
+        svg_nodes.attr("cx", function (d) {
+            return d.x;
+        })
+            .attr("cy", function (d) {
+                return d.y;
+            });
+
+        //更新文字坐标
+        svg_texts.attr("x", function (d) {
+            return d.x;
+        })
+            .attr("y", function (d) {
+                return d.y;
+            });
+    });
+
+</script>
+</body>
+</html>
