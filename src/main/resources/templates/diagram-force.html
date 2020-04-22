@@ -1,0 +1,136 @@
+﻿<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/web/thymeleaf/layout">
+
+<head>
+    <title>主机力导向图</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <style type="text/css">
+        .pl-20{
+            padding-left:20px
+        }
+        text{
+            cursor:pointer;
+            max-width: 25px;
+            display: inline-block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            vertical-align: middle;
+        }
+        circle{
+            cursor:pointer;
+        }
+        #graphcontainerdiv{
+            background:#fff;
+        }
+        .circle_opreate{
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+<div  id="app" class="mind-con">
+    <div id="graphcontainer"  class="graphcontainer"></div>
+    <div class="svg-set-box"></div>
+    <!-- 空白处右键 -->
+    <ul class="el-dropdown-menu el-popper blankmenubar" id="blank_menubar" style="display: none;">
+        <li  class="el-dropdown-menu__item" @click="btnaddsingle">
+            <span class="pl-15">添加节点</span>
+        </li>
+        <li  class="el-dropdown-menu__item" @click="btnquickaddnode">
+            <span class="pl-15">快速添加</span>
+        </li>
+    </ul>
+    <!-- 连线按钮组 -->
+    <ul class="el-dropdown-menu el-popper linkmenubar" id="link_menubar" style="display: none;">
+        <li  class="el-dropdown-menu__item" @click="updatelinkName">
+            <span class="pl-15">编辑</span>
+        </li>
+        <li  class="el-dropdown-menu__item" @click="deletelink">
+            <span class="pl-15">删除</span>
+        </li>
+    </ul>
+</div>
+<!-- 中部 -->
+<!--<el-scrollbar class="mind-cen" id="graphcontainerdiv">-->
+    <!--<div id="nodedetail" class="node_detail">-->
+        <!--<h5>详细数据</h5>-->
+        <!--<span class="node_pd" v-for="(m,k) in nodedetail">{{k}}:{{m}}</span>-->
+    <!--</div>-->
+    <!--<el-scrollbar v-show="jsonshow" id="jsoncontainer"  class="jsoncontainer">-->
+        <!--<pre id="json-renderer"></pre>-->
+    <!--</el-scrollbar>-->
+    <!--<div id="graphcontainer"  class="graphcontainer"></div>-->
+<!--</el-scrollbar>-->
+<!--右键批量添加-->
+<!--<el-dialog id="batchcreateform" :title="operatenameformat(operatetype)":visible.sync="isbatchcreate" width="30%">-->
+    <!--<div v-show="operatetype==1" class="mb-l">添加同级</div>-->
+    <!--<div v-show="operatetype==2" class="mb-l">添加下级</div>-->
+    <!--<div v-show="operatetype==3" class="mb-l">批量添加</div>-->
+    <!--<div v-show="operatetype==4" class="mb-l">段落识别</div>-->
+    <!--<div class="mb-r">-->
+        <!--<div v-show="operatetype!=2" class="mb-m">-->
+            <!--<div class="mb-label">源节点名称</div>-->
+            <!--<div class="mb-con">-->
+                <!--<el-input v-model="batchcreate.sourcenodename"></el-input>-->
+                <!--<span v-show="operatetype==3" class="mb-label">（只能添加一个）</span>-->
+                <!--<span v-show="operatetype==1" class="mb-label">（多个以英文逗号隔开）</span>-->
+            <!--</div>-->
+            <!--<div class="mb-label" v-show="operatetype!==1">关系</div>-->
+            <!--<div class="mb-con" v-show="operatetype!==1">-->
+                <!--<el-input v-model="batchcreate.relation"></el-input>-->
+                <!--<div class="mb-label">（只能添加一个）</div>-->
+            <!--</div>-->
+        <!--</div>-->
+        <!--<div v-show="operatetype!=1" class="mb-m">-->
+            <!--<div class="mb-label">子节点名称</div>-->
+            <!--<div class="mb-con">-->
+                <!--<el-input v-model="batchcreate.targetnodenames"></el-input>-->
+                <!--<span class="mb-label " v-show="operatetype==3">（多个以英文逗号隔开,可不填）</span>-->
+                <!--<span class="mb-label " v-show="operatetype==2">（多个以英文逗号隔开）</span>-->
+            <!--</div>-->
+        <!--</div>-->
+        <!--<div class="mb-m tc">-->
+            <!--<el-button v-show="operatetype==1" type="primary" @click="batchcreatesamenode">确定</el-button>-->
+            <!--<el-button v-show="operatetype==2" type="primary" @click="batchcreatechildnode">确定</el-button>-->
+            <!--<el-button v-show="operatetype==3" type="primary" @click="batchcreatenode">确定</el-button>-->
+            <!--<el-button @click="resetsubmit">取消</el-button>-->
+        <!--</div>-->
+    <!--</div>-->
+<!--</el-dialog>-->
+<!-- 富文本展示 -->
+<div id="richContainer" style="display: none;width: 400px">
+    <div class="mind-fj-box" v-show="showImageList.length>0 ||editorcontent!=''">
+        <div class="mind-carousel" v-show="showImageList.length>0">
+            <el-carousel height="197px" :interval="2000" arrow="always">
+                <el-carousel-item v-for="item in showImageList" :key="item.ID">
+                    <div class="carous-img">
+                        <img  :src="item.FileName" alt="">
+                    </div>
+                </el-carousel-item>
+            </el-carousel>
+        </div>
+        <el-scrollbar v-show="editorcontent!=''" class="mind-fj-p">
+            <p v-html="editorcontent" ></p>
+        </el-scrollbar>
+    </div>
+</div>
+</body>
+
+
+<!--<script src="https://cdn.bootcss.com/jquery/3.3.1/jquery.min.js"></script>-->
+<!--<script src="https://cdn.bootcss.com/vue/2.5.21/vue.js"></script>-->
+<!--<script src="https://cdn.bootcss.com/lodash.js/3.5.0/lodash.min.js"></script>-->
+<!--<script src="https://cdn.bootcss.com/d3/4.13.0/d3.js"></script>-->
+<script src="../static/js/3.3.1-jquery.min.js"></script>
+<script src="../static/js/2.5.21-vue.js"></script>
+<script src="../static/js/3.5.0-lodash.min.js"></script>
+<script src="../static/js/4.13.0-d3.js"></script>
+<script src="../static/js/index.js"></script>
+<link rel="stylesheet" href="../static/css/element-style.css">
+<script src="../static/wangeditor/wangEditor.js"></script>
+<link rel="stylesheet" href="../static/wangeditor/wangEditor.css">
+<!-- 力导向图js -->
+<script src="../static/js/diagram-force.js"></script>
+</html>
