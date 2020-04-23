@@ -1,4 +1,15 @@
-var jsondata={"node":[{"name":"酷酷酷酷酷酷","uuid":"18147380","r":"100","color":"blue"},{"name":"KKKKK","uuid":"18147392"},{"name":"QQQQQ","uuid":"18147393"},{"name":"XXXXX","uuid":"18147394"}],"relationship":[{"sourceid":"18147380","targetid":"18147392","name":"下位","uuid":"48723709"},{"sourceid":"18147380","targetid":"18147393","name":"下位","uuid":"48723710"}]} ;
+var jsondata = {
+    "node": [{"name": "酷酷酷酷酷酷", "uuid": "18147380", "r": 100, "color": "blue"}, {
+        "name": "KKKKK",
+        "uuid": "18147392"
+    }, {"name": "QQQQQ", "uuid": "18147393"}, {"name": "XXXXX", "uuid": "18147394"}],
+    "relationship": [{
+        "sourceid": "18147380",
+        "targetid": "18147392",
+        "name": "下位",
+        "uuid": "48723709"
+    }, {"sourceid": "18147380", "targetid": "18147393", "name": "下位", "uuid": "48723710"}]
+};
 var app = new Vue({
     el: '#app',
     data: {
@@ -13,19 +24,69 @@ var app = new Vue({
         nodesymbolGroup:null,
         nodebuttonGroup:null,
         nodebuttonAction:'',
+        tooltip:null,
+        tipsshow:true,
         txx:{},
         tyy:{},
+        nodedetail:null,
+        pagesizelist: [{size: 100, isactive: true}, {size: 500, isactive: false}, {size: 1000,isactive: false}, {size: 2000, isactive: false}],
         colorList: ["#ff8373", "#f9c62c", "#a5ca34", "#6fce7a", "#70d3bd", "#ea91b0"],
         color5: '#ff4500',
         predefineColors: ['#ff4500', '#ff8c00', '#90ee90', '#00ced1', '#1e90ff', '#c71585'],
         defaultcr: 30,
+        activeName: '',
+        dataconfigactive: '',
+        querywords: '',
+        operatetype: 0,
+        isedit: false,
+        isaddnode: false,
+        isaddlink: false,
+        isdeletelink: false,
+        isbatchcreate: false,
         selectnodeid: 0,
         selectnodename: '',
         selectsourcenodeid: 0,
         selecttargetnodeid: 0,
+        sourcenodex1: 0,
+        sourcenodey1: 0,
+        mousex: 0,
+        mousey: 0,
+        domain: '',
+        domainid: 0,
+        nodename: '',
+        pagesize: 100,
+        cyphertext:'',
+        cyphertextshow:false,
+        jsonshow:false,
+        propactiveName: 'propedit',
+        contentactiveName: 'propimage',
+        // uploadimageurl: contextRoot + "qiniu/upload",
+        // uploadimageparam: {},
+        nodeimagelist: [],
+        netimageurl: '',
+        dialogimageVisible: false,
+        dialogImageUrl: '',
+        showImageList: [],
+        editorcontent: '',
+        selectnode: {
+            name: '',
+            count: 0
+        },
+        pageModel: {
+            pageIndex: 1,
+            pageSize: 10,
+            totalCount: 0,
+            totalPage: 0,
+            nodeList: []
+        },
         graph: {
             nodes: [],
             links: []
+        },
+        batchcreate: {
+            sourcenodename: '',
+            targetnodenames: '',
+            relation: '',
         },
         graphEntity: {
             uuid: 0,
@@ -35,9 +96,12 @@ var app = new Vue({
             x: "",
             y: ""
         },
-
+        uploadparam: {domain: ""},
+        domainlabels: [],
         dialogFormVisible: false,
+        exportFormVisible: false,
         headers: {},
+        // uploadurl: contextRoot + "importgraph"
     },
     //mounted钩子函数一般是用来向后端发起请求拿到数据以后做一些业务处理,该钩子函数是在挂载完成以后也就是模板渲染完成以后才会被调用
     mounted() {
@@ -57,9 +121,135 @@ var app = new Vue({
         this.graph.links = jsondata.relationship;
     },
     methods: {
-
+        createdomain(value) {//创建图谱
+            var _this = this;
+            _this.$prompt('请输入领域名称', '提示', {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消'
+            }).then(function (res) {
+                value = res.value;
+                var data = {domain: value};
+                $.ajax({
+                    data: data,
+                    type: "POST",
+                    url: contextRoot + "createdomain",
+                    success: function (result) {
+                        if (result.code == 200) {
+                            _this.getlabels();
+                            _this.domain = value;
+                            _this.getdomaingraph();
+                        } else {
+                            _this.$message({
+                                showClose: true,
+                                message: result.msg,
+                                type: 'warning'
+                            });
+                        }
+                    }
+                });
+            }).catch(function () {
+                _this.$message({
+                    type: 'info',
+                    message: '取消输入'
+                });
+            });
+        },
+        operatenameformat() {
+            if (this.operatetype == 1) {
+                return "添加同级";
+            } else if (this.operatetype == 2) {
+                return "添加下级";
+            } else if (this.operatetype == 3) {
+                return "批量添加";
+            }
+        },
+        resetsubmit() {//添加窗口取消按钮js
+            this.isaddnode = false;
+            this.isedit = false;
+            this.resetentity();
+            this.fieldDataList = [];
+            this.dataconfigactive = '';
+            this.isbatchcreate = false;
+            this.selectnodeid = 0;
+        },
+        resetentity() {
+            this.graphEntity = {
+                uuid: 0,
+                color: 'ff4500',
+                name: '',
+                r: 30,
+                x: '',
+                y: ''
+            };
+        },
+        batchcreatenode() { //批量添加请求
+            var _this = this;
+            var data = {
+                domain: _this.domain,
+                sourcename: _this.batchcreate.sourcenodename,
+                targetnames: _this.batchcreate.targetnodenames,
+                relation: _this.batchcreate.relation
+            };
+            $.ajax({
+                data: data,
+                type: "POST",
+                url: contextRoot + "batchcreatenode",
+                success: function (result) {
+                    if (result.code == 200) {
+                        _this.isbatchcreate = false;
+                        var newnodes = result.data.nodes;
+                        var newships = result.data.ships;
+                        newnodes.forEach(function (m) {
+                            var sobj = _this.graph.nodes.find(function (x) {
+                                return x.uuid === m.uuid
+                            })
+                            if (typeof(sobj) == "undefined") {
+                                _this.graph.nodes.push(m);
+                            }
+                        })
+                        newships.forEach(function (m) {
+                            var sobj = _this.graph.links.find(function (x) {
+                                return x.uuid === m.uuid
+                            })
+                            if (typeof(sobj) == "undefined") {
+                                _this.graph.links.push(m);
+                            }
+                        })
+                        _this.updategraph();
+                        _this.batchcreate.sourcenodename = '';
+                        _this.batchcreate.targetnodenames = '';
+                        _this.$message({
+                            message: '操作成功',
+                            type: 'success'
+                        });
+                    }
+                }
+            });
+        },
+        requestFullScreen() { //全屏
+            var element = document.getElementById("graphcontainer");
+            var width = window.screen.width;
+            var height = window.screen.height;
+            this.svg.attr("width", width);
+            this.svg.attr("height", height);
+            if (element.requestFullscreen) {
+                element.requestFullscreen();
+            }
+            // FireFox
+            else if (element.mozRequestFullScreen) {
+                element.mozRequestFullScreen();
+            }
+            // Chrome等
+            else if (element.webkitRequestFullScreen) {
+                element.webkitRequestFullScreen();
+            }
+            // IE11
+            else if (element.msRequestFullscreen) {
+                element.msRequestFullscreen();
+            }
+        },
         //右键空白部分js
-        btnaddsingle(){
+        btnaddsingle() {
             d3.select('.graphcontainer').style("cursor", "crosshair");//进入新增模式，鼠标变成＋
         },
         btndeletelink() {
@@ -88,7 +278,7 @@ var app = new Vue({
                             var sobj = _this.graph.nodes.find(function (x) {
                                 return x.uuid === m.uuid
                             })
-                            if (typeof(sobj) == "undefined") {
+                            if (typeof (sobj) == "undefined") {
                                 _this.graph.nodes.push(m);
                             }
                         })
@@ -104,7 +294,7 @@ var app = new Vue({
                             var sobj = _this.graph.links.find(function (x) {
                                 return x.uuid === m.uuid
                             })
-                            if (typeof(sobj) == "undefined") {
+                            if (typeof (sobj) == "undefined") {
                                 _this.graph.links.push(m);
                             }
                         })
@@ -130,7 +320,7 @@ var app = new Vue({
                 }
             })
         },
-        initgraph(){
+        initgraph() {
             //创建画布
             var graphcontainer = d3.select(".graphcontainer");
             var width = graphcontainer._groups[0][0].offsetWidth;
@@ -139,7 +329,7 @@ var app = new Vue({
             this.svg.attr("width", width);
             this.svg.attr("height", height);
             this.simulation = d3.forceSimulation()  //创建一个新的力学仿真（自动启动）
-                .force("link", d3.forceLink().distance(function(d){  //创建一个 link(弹簧) 作用力,并设置 link 的距离
+                .force("link", d3.forceLink().distance(function (d) {  //创建一个 link(弹簧) 作用力,并设置 link 的距离
                     return Math.floor(Math.random() * (700 - 200)) + 200;
                 }).id(function (d) {
                     return d.uuid
@@ -155,7 +345,7 @@ var app = new Vue({
             this.nodebuttonGroup = this.svg.append("g").attr("class", "nodebutton");
             this.addmaker();//箭头定义
             this.addnodebutton();//为每一个节点定制按钮组
-            this.svg.on('click',function(){ //子节点隐藏
+            this.svg.on('click', function () { //子节点隐藏
                 d3.selectAll("use").classed("circle_opreate", true);
             }, 'false');
 
@@ -169,15 +359,15 @@ var app = new Vue({
                 var sourceNode = nodes.filter(function (n) {
                     return n.uuid === m.sourceid;
                 })[0];
-                if (typeof(sourceNode) == 'undefined') return;
+                if (typeof (sourceNode) == 'undefined') return;
                 var targetNode = nodes.filter(function (n) {
                     return n.uuid === m.targetid;
                 })[0];
-                if (typeof(targetNode) == 'undefined') return;
+                if (typeof (targetNode) == 'undefined') return;
                 links.push({source: sourceNode.uuid, target: targetNode.uuid, lk: m});
             });
-            if(links.length>0){//判断是否有重复的link并作处理
-                _.each(links, function(link) {
+            if (links.length > 0) {//判断是否有重复的link并作处理
+                _.each(links, function (link) {
                     var same = _.where(links, {
                         'source': link.source,
                         'target': link.target
@@ -187,12 +377,12 @@ var app = new Vue({
                         'target': link.source
                     });
                     var sameAll = same.concat(sameAlt);
-                    _.each(sameAll, function(s, i) {
+                    _.each(sameAll, function (s, i) {
                         s.sameIndex = (i + 1);
                         s.sameTotal = sameAll.length;
                         s.sameTotalHalf = (s.sameTotal / 2);
                         s.sameUneven = ((s.sameTotal % 2) !== 0);
-                        s.sameMiddleLink = ((s.sameUneven === true) &&(Math.ceil(s.sameTotalHalf) === s.sameIndex));
+                        s.sameMiddleLink = ((s.sameUneven === true) && (Math.ceil(s.sameTotalHalf) === s.sameIndex));
                         s.sameLowerHalf = (s.sameIndex <= s.sameTotalHalf);
                         s.sameArcDirection = 1;
                         //s.sameArcDirection = s.sameLowerHalf ? 0 : 1;
@@ -200,13 +390,13 @@ var app = new Vue({
                     });
                 });
                 var maxSame = _.chain(links)
-                    .sortBy(function(x) {
+                    .sortBy(function (x) {
                         return x.sameTotal;
                     })
                     .last()
                     .value().sameTotal;
 
-                _.each(links, function(link) {
+                _.each(links, function (link) {
                     link.maxSameHalf = Math.round(maxSame / 2);
                 });
             }
@@ -267,7 +457,7 @@ var app = new Vue({
             nodesymbol = nodesymbolEnter.merge(nodesymbol);
             nodesymbol.attr("fill", "#e15500");
             nodesymbol.attr("display", function (d) {
-                if (typeof(d.hasfile) != "undefined" && d.hasfile > 0) {
+                if (typeof (d.hasfile) != "undefined" && d.hasfile > 0) {
                     return "block";
                 }
                 return "none";
@@ -275,17 +465,18 @@ var app = new Vue({
             _this.simulation.nodes(nodes).on("tick", ticked);
             _this.simulation.force("link").links(links);
             _this.simulation.alphaTarget(0).restart();
+
             function linkArc(d) {
                 var dx = (d.target.x - d.source.x),
                     dy = (d.target.y - d.source.y),
                     dr = Math.sqrt(dx * dx + dy * dy),
                     unevenCorrection = (d.sameUneven ? 0 : 0.5);
                 var curvature = 2,
-                    arc = (1.0/curvature)*((dr * d.maxSameHalf) / (d.sameIndexCorrected - unevenCorrection));
+                    arc = (1.0 / curvature) * ((dr * d.maxSameHalf) / (d.sameIndexCorrected - unevenCorrection));
                 if (d.sameMiddleLink) {
                     arc = 0;
                 }
-                var dd="M" + d.source.x + "," + d.source.y + "A" + arc + "," + arc + " 0 0," + d.sameArcDirection + " " + d.target.x + "," + d.target.y;
+                var dd = "M" + d.source.x + "," + d.source.y + "A" + arc + "," + arc + " 0 0," + d.sameArcDirection + " " + d.target.x + "," + d.target.y;
                 return dd;
             }
 
@@ -305,12 +496,12 @@ var app = new Vue({
                     });*/
                 link.attr("d", linkArc); //连线位置计算
                 // 刷新连接线上的文字位置
-                /* linktext.attr("x", function (d) {
+                linktext.attr("x", function (d) {
                      return (d.source.x + d.target.x) / 2;
                  })
                      .attr("y", function (d) {
                          return (d.source.y + d.target.y) / 2;
-                     })*/
+                     })
 
 
                 // 更新节点坐标
@@ -328,7 +519,7 @@ var app = new Vue({
                         return d.y;
                     });
                 nodebutton.attr("transform", function (d) {
-                    return "translate(" + d.x + "," + d.y+ ") scale(1)";
+                    return "translate(" + d.x + "," + d.y + ") scale(1)";
                 })
 
                 // 更新文字坐标
@@ -343,20 +534,21 @@ var app = new Vue({
                     return "translate(" + (d.x + 8) + "," + (d.y - 30) + ") scale(0.015,0.015)";
                 })
             }
+
             // 鼠标滚轮缩放
             //_this.svg.call(d3.zoom().transform, d3.zoomIdentity);//缩放至初始倍数
             _this.svg.call(d3.zoom().on("zoom", function () {
-                d3.selectAll('.node').attr("transform",d3.event.transform);
-                d3.selectAll('.nodetext').attr("transform",d3.event.transform);
-                d3.selectAll('.line').attr("transform",d3.event.transform);
-                d3.selectAll('.linetext').attr("transform",d3.event.transform);
-                d3.selectAll('.nodesymbol').attr("transform",d3.event.transform);
-                d3.selectAll('.nodebutton').attr("transform",d3.event.transform);
+                d3.selectAll('.node').attr("transform", d3.event.transform);
+                d3.selectAll('.nodetext').attr("transform", d3.event.transform);
+                d3.selectAll('.line').attr("transform", d3.event.transform);
+                d3.selectAll('.linetext').attr("transform", d3.event.transform);
+                d3.selectAll('.nodesymbol').attr("transform", d3.event.transform);
+                d3.selectAll('.nodebutton').attr("transform", d3.event.transform);
                 //_this.svg.selectAll("g").attr("transform", d3.event.transform);
             }));
             _this.svg.on("dblclick.zoom", null); // 静止双击缩放
             //按钮组事件
-            _this.svg.selectAll(".buttongroup").on("click", function (d,i) {
+            _this.svg.selectAll(".buttongroup").on("click", function (d, i) {
                 console.log(_this.nodebuttonAction);
                 console.log(d);
                 if (_this.nodebuttonAction) {
@@ -364,8 +556,8 @@ var app = new Vue({
                         case "EDIT":
                             _this.isedit = true;
                             _this.propactiveName = 'propedit';
-                            _this.txx=d.x;
-                            _this.tyy=d.y;
+                            _this.txx = d.x;
+                            _this.tyy = d.y;
                             break;
                         case "MORE":
                             _this.getmorenode();
@@ -377,11 +569,11 @@ var app = new Vue({
                             break;
                         case "LINK":
                             _this.isaddlink = true;
-                            _this.selectsourcenodeid=d.uuid;
+                            _this.selectsourcenodeid = d.uuid;
                             break;
                         case "DELETE":
-                            _this.selectnodeid=d.uuid;
-                            var out_buttongroup_id='.out_buttongroup_'+i;
+                            _this.selectnodeid = d.uuid;
+                            var out_buttongroup_id = '.out_buttongroup_' + i;
                             _this.deletenode(out_buttongroup_id);
                             break;
                     }
@@ -391,19 +583,19 @@ var app = new Vue({
             });
             //按钮组事件绑定
             _this.svg.selectAll(".action_0").on("click", function (d) {
-                _this.nodebuttonAction='EDIT';
+                _this.nodebuttonAction = 'EDIT';
             });
             _this.svg.selectAll(".action_1").on("click", function (d) {
-                _this.nodebuttonAction='MORE';
+                _this.nodebuttonAction = 'MORE';
             });
             _this.svg.selectAll(".action_2").on("click", function (d) {
-                _this.nodebuttonAction='CHILD';
+                _this.nodebuttonAction = 'CHILD';
             });
             _this.svg.selectAll(".action_3").on("click", function (d) {
-                _this.nodebuttonAction='LINK';
+                _this.nodebuttonAction = 'LINK';
             });
             _this.svg.selectAll(".action_4").on("click", function (d) {
-                _this.nodebuttonAction='DELETE';
+                _this.nodebuttonAction = 'DELETE';
             });
         },
         createnode() { //创建节点
@@ -456,23 +648,23 @@ var app = new Vue({
             //先删除所有为节点自定义的按钮组
             d3.selectAll("svg >defs").remove();
             var nodes = this.graph.nodes;
-            var database = [1,1,1,1,1];
+            var database = [1, 1, 1, 1, 1];
             var pie = d3.pie();
             var piedata = pie(database);
             var nodebutton = this.svg.append("defs");
-            nodes.forEach(function(m){
-                var nbtng=nodebutton.append("g")
-                    .attr("id", "out_circle"+m.uuid);//为每一个节点定制一个按钮组，在画按钮组的时候为其指定该id
-                var buttonEnter=nbtng.selectAll(".buttongroup")
+            nodes.forEach(function (m) {
+                var nbtng = nodebutton.append("g")
+                    .attr("id", "out_circle" + m.uuid);//为每一个节点定制一个按钮组，在画按钮组的时候为其指定该id
+                var buttonEnter = nbtng.selectAll(".buttongroup")
                     .data(piedata)
                     .enter()
                     .append("g")
                     .attr("class", function (d, i) {
-                        return "action_" + i ;
+                        return "action_" + i;
                     });
-                var defaultR=30;
-                if(typeof (m.r)=='undefined'){
-                    m.r=defaultR;
+                var defaultR = 30;
+                if (typeof (m.r) == 'undefined') {
+                    m.r = defaultR;
                 }
                 var or = parseInt(m.r) * 1.5 + 10;//外半径计算
                 var arc = d3.arc()
@@ -522,20 +714,20 @@ var app = new Vue({
             var _this = this;
             var nodeEnter = node.enter().append("circle");
             nodeEnter.attr("r", function (d) { //设置半径
-                if (typeof(d.r) != "undefined" && d.r != '') {
+                if (typeof (d.r) != "undefined" && d.r != '') {
                     return d.r
                 }
                 return 30;
             });
             nodeEnter.attr("fill", function (d) { //设置填充颜色
-                if (typeof(d.color) != "undefined" && d.color != '') {
+                if (typeof (d.color) != "undefined" && d.color != '') {
                     return d.color
                 }
                 return "#ff4500";
             });
             nodeEnter.style("opacity", 0.8);
             nodeEnter.style("stroke", function (d) {//设置轮廓颜色
-                if (typeof(d.color) != "undefined" && d.color != '') {
+                if (typeof (d.color) != "undefined" && d.color != '') {
                     return d.color
                 }
                 return "#ff4500";
@@ -558,7 +750,7 @@ var app = new Vue({
                 }, 3000);
             });
             nodeEnter.on("mouseout", function (d, i) {
-                clearTimeout( _this.timer);
+                clearTimeout(_this.timer);
             });
             nodeEnter.on("dblclick", function (d) {
                 app.updatenodename(d);// 双击更新节点名称
@@ -573,9 +765,9 @@ var app = new Vue({
                 if (aa.classList.contains("selected")) return;
                 d3.select(this).style("stroke-width", "2");
             });
-            nodeEnter.on("click", function (d,i) {
+            nodeEnter.on("click", function (d, i) {
                 d3.select('#nodedetail').style('display', 'block');
-                var out_buttongroup_id='.out_buttongroup_'+i;
+                var out_buttongroup_id = '.out_buttongroup_' + i;
                 _this.svg.selectAll(".buttongroup").classed("circle_opreate", true);
                 _this.svg.selectAll(out_buttongroup_id).classed("circle_opreate", false);
                 _this.graphEntity = d;
@@ -679,14 +871,14 @@ var app = new Vue({
         drawnodebutton(nodebutton) {
             var _this = this;
             var nodebuttonEnter = nodebutton.enter().append("g").append("use")//  为每个节点组添加一个 use 子元素
-                .attr("r", function(d){
+                .attr("r", function (d) {
                     return d.r;
                 })
                 .attr("xlink:href", function (d) {
-                    return "#out_circle"+d.uuid;
+                    return "#out_circle" + d.uuid;
                 }) //  指定 use 引用的内容
-                .attr('class',function(d,i){
-                    return 'buttongroup out_buttongroup_'+i;
+                .attr('class', function (d, i) {
+                    return 'buttongroup out_buttongroup_' + i;
                 })
                 .classed("circle_opreate", true);
 
@@ -739,7 +931,7 @@ var app = new Vue({
                 .append("textPath")
                 .attr("startOffset", "50%")
                 .attr("text-anchor", "middle")
-                .attr("xlink:href", function(d) {
+                .attr("xlink:href", function (d) {
                     return "#invis_" + d.lk.sourceid + "-" + d.lk.name + "-" + d.lk.targetid;
                 })
                 .style("font-size", 14)
@@ -877,7 +1069,7 @@ var app = new Vue({
                 cancelButtonText: '取消',
                 inputValue: this.selectlinkname
             }).then(function (res) {
-                value=res.value;
+                value = res.value;
                 var data = {domain: _this.domain, shipid: _this.selectnodeid, shipname: value};
                 $.ajax({
                     data: data,
@@ -912,7 +1104,7 @@ var app = new Vue({
                 cancelButtonText: '取消',
                 inputValue: d.name
             }).then(function (res) {
-                value=res.value;
+                value = res.value;
                 var data = {domain: _this.domain, nodeid: d.uuid, nodename: value};
                 $.ajax({
                     data: data,
@@ -942,6 +1134,82 @@ var app = new Vue({
                 });
             });
         },
+        prophandleClick(tab, event) {//判断界面
+            if (tab.name == 'richtextedit') {
+                this.editorcontent = '';
+                // this.initNodeContent();
+                this.initEditor();
+
+            }
+            if (tab.name == 'propimage') {
+                this.nodeimagelist = [];
+                this.initNodeImage();
+            }
+        },
+        savenodecontent() { //文字编辑
+            var _this = this;
+            var data = {domainid: _this.domainid, nodeid: _this.selectnodeid, content: _this.editorcontent};
+            $.ajax({
+                dataType: 'json',
+                data: JSON.stringify(data),
+                contentType: 'application/json; charset=UTF-8',
+                type: "POST",
+                url: contextRoot + "savenodecontent",
+                success: function (result) {
+                    if (result.code == 200) {
+                        _this.$message({
+                            message: '操作成功',
+                            type: 'success'
+                        });
+                    }
+                }
+            })
+        },
+        initNodeContent() { //获取库中节点文字描述
+            var _this = this;
+            var data = {domainid: _this.domainid, nodeid: _this.selectnodeid};
+            $.ajax({
+                data: data,
+                type: "POST",
+                url: contextRoot + "getnodecontent",
+                success: function (result) {
+                    _this.editor.txt.html("");
+                    if (result.code == 200) {
+                        _this.editorcontent = result.data.Content;
+                        editor.txt.html(result.data.Content)
+                    }
+                }
+            })
+        },
+        initEditor() {
+            var  _this=this;
+            if (_this.editor != null) return;
+            var E = window.wangEditor;
+            _this.editor = new E(this.$refs.eidtorToolbar, this.$refs.eidtorContent);
+            _this.editor.customConfig.onchange = function (html) {
+                _this.editorcontent = html;
+            };
+            var token = $("meta[name='_csrf']").attr("content");
+            var header = $("meta[name='_csrf_header']").attr("content");
+            var str = '{ "' + header + '": "' + token + '"}';
+            var headers = eval('(' + str + ')');
+            // _this.editor.customConfig.uploadFileName = 'file';
+            // _this.editor.customConfig.uploadImgHeaders = headers;
+            // _this.editor.customConfig.uploadImgServer = contextRoot + "qiniu/upload"; // 上传图片到服务器
+            // _this.editor.customConfig.uploadImgHooks = {
+            //     // 如果服务器端返回的不是 {errno:0, data: [...]} 这种格式，可使用该配置
+            //     // （但是，服务器端返回的必须是一个 JSON 格式字符串！！！否则会报错）
+            //     customInsert: function (insertImg, res, editor) {
+            //         // 图片上传并返回结果，自定义插入图片的事件（而不是编辑器自动插入图片！！！）
+            //         // insertImg 是插入图片的函数，editor 是编辑器对象，result 是服务器端返回的结果
+            //         for (var i = 0; i < res.results.length; i++) {
+            //             var fileitem = res.results[i];
+            //             insertImg(fileitem.url)
+            //         }
+            //     }
+            // }
+            _this.editor.create();
+        },
     }
 })
 $(function () {
@@ -963,11 +1231,11 @@ $(function () {
         event.preventDefault(); //取消浏览器默认操作
     });
     $(".graphcontainer").bind("click", function (event) {
-        var cursor=document.getElementById("graphcontainer").style.cursor;
-        if(cursor=='crosshair'){   //鼠标'+'号模式单击
+        var cursor = document.getElementById("graphcontainer").style.cursor;
+        if (cursor == 'crosshair') {   //鼠标'+'号模式单击
             d3.select('.graphcontainer').style("cursor", "");
-            app.txx=event.offsetX;
-            app.tyy=event.offsetY;
+            app.txx = event.offsetX;
+            app.tyy = event.offsetY;
             app.createnode();
         }
         event.preventDefault();//取消浏览器默认操作
@@ -977,12 +1245,18 @@ $(function () {
         d3.select('#link_menubar').style('display', 'none');
     });
     $("body").bind("mousedown", function (event) {
-        if (!(event.target.id === "link_menubar" || $(event.target).parents("#link_menubar").length > 0)) {
-            $("#link_menubar").hide();
-        }
         if (!(event.target.id === "linkmenubar" || $(event.target).parents("#linkmenubar").length > 0)) {
             $("#linkmenubar").hide();
         }
+        if (!(event.target.id === "batchcreateform" || $(event.target).parents("#batchcreateform").length > 0)) {
+            app.isbatchcreate = false;
+        }
+        if (!(event.target.id === "richContainer" || $(event.target).parents("#richContainer").length > 0)) {
+            $("#richContainer").hide();
+        }
+        if (!(event.target.id === "nodedetail" || $(event.target).parents("#nodedetail").length > 0)) {
+            d3.select('#nodedetail').style('display', 'none');
+        }
 
     });
-})
+});
